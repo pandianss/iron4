@@ -1,0 +1,66 @@
+{
+  "scenarioId": "fail-migration-v1-to-v2",
+  "class": "migration-failure",
+  "description": "Migration throws and simulation terminates safely",
+  "fromVersion": "v1",
+  "toVersion": "v2",
+  "auditHashes": [
+    "{\"previousHash\":null,\"payload\":{\"action\":\"initialize\",\"subject\":{\"type\":\"simulation\",\"id\":\"SIM-CROSS-VERSION\"},\"result\":{\"status\":\"success\"}}}",
+    "{\"previousHash\":\"{\\\"previousHash\\\":null,\\\"payload\\\":{\\\"action\\\":\\\"initialize\\\",\\\"subject\\\":{\\\"type\\\":\\\"simulation\\\",\\\"id\\\":\\\"SIM-CROSS-VERSION\\\"},\\\"result\\\":{\\\"status\\\":\\\"success\\\"}}}\",\"payload\":{\"action\":\"terminate\",\"subject\":{\"type\":\"simulation\",\"id\":\"SIM-CROSS-VERSION\"},\"result\":{\"status\":\"failure\",\"errorCode\":\"MIGRATION_FAIL\",\"message\":\"Injected migration failure\"}}}"
+  ],
+  "auditRecords": [
+    {
+      "id": "AUD-0",
+      "simulationId": "SIM-CROSS-VERSION",
+      "timestamp": {
+        "tick": 0,
+        "epoch": 0
+      },
+      "actor": {
+        "type": "simulation",
+        "id": "SIM-CROSS-VERSION"
+      },
+      "integrity": {
+        "hash": "{\"previousHash\":null,\"payload\":{\"action\":\"initialize\",\"subject\":{\"type\":\"simulation\",\"id\":\"SIM-CROSS-VERSION\"},\"result\":{\"status\":\"success\"}}}"
+      },
+      "action": "initialize",
+      "subject": {
+        "type": "simulation",
+        "id": "SIM-CROSS-VERSION"
+      },
+      "result": {
+        "status": "success"
+      }
+    },
+    {
+      "id": "AUD-1",
+      "simulationId": "SIM-CROSS-VERSION",
+      "timestamp": {
+        "tick": 1,
+        "epoch": 0
+      },
+      "actor": {
+        "type": "simulation",
+        "id": "SIM-CROSS-VERSION"
+      },
+      "integrity": {
+        "hash": "{\"previousHash\":\"{\\\"previousHash\\\":null,\\\"payload\\\":{\\\"action\\\":\\\"initialize\\\",\\\"subject\\\":{\\\"type\\\":\\\"simulation\\\",\\\"id\\\":\\\"SIM-CROSS-VERSION\\\"},\\\"result\\\":{\\\"status\\\":\\\"success\\\"}}}\",\"payload\":{\"action\":\"terminate\",\"subject\":{\"type\":\"simulation\",\"id\":\"SIM-CROSS-VERSION\"},\"result\":{\"status\":\"failure\",\"errorCode\":\"MIGRATION_FAIL\",\"message\":\"Injected migration failure\"}}}",
+        "previousHash": "{\"previousHash\":null,\"payload\":{\"action\":\"initialize\",\"subject\":{\"type\":\"simulation\",\"id\":\"SIM-CROSS-VERSION\"},\"result\":{\"status\":\"success\"}}}"
+      },
+      "action": "terminate",
+      "subject": {
+        "type": "simulation",
+        "id": "SIM-CROSS-VERSION"
+      },
+      "result": {
+        "status": "failure",
+        "errorCode": "MIGRATION_FAIL",
+        "message": "Injected migration failure"
+      }
+    }
+  ],
+  "termination": {
+    "reason": "State migration failure",
+    "phase": "INITIALIZED"
+  }
+}
