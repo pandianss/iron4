@@ -82,7 +82,9 @@ export type AuditAction =
     | "chaos.budget.throttled"
     | "chaos.budget.resize.evaluated"
     | "chaos.budget.resized"
+    | "chaos.budget.forecast.generated"
     | "chaos.roi.calculated"
+
     | "chaos.pattern.retired"
     | "chaos.budget.adjusted"
 

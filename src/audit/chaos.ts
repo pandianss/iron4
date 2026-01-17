@@ -236,3 +236,56 @@ export function resizeBudget(
     // Enforce policy bounds
     return Math.max(policy.bounds.minBudget, Math.min(policy.bounds.maxBudget, newLimit))
 }
+
+// --- Predictive Budget Forecasting (PCBF) ---
+
+export type PredictiveBudgetPolicy = {
+    targetConfidence: number
+    roiExpectations: { optimistic: number; expected: number; pessimistic: number }
+    halfLifeDays: number
+    safetyMultipliers: { highCoupling: number; highReleaseRisk: number }
+}
+
+export type BudgetForecast = {
+    scenarioId: string
+    forecast: { optimistic: number; expected: number; pessimistic: number }
+    justification: string
+}
+
+/**
+ * Predictive Budget Forecasting
+ * Anticipates chaos demand based on confidence decay and coupling risk.
+ */
+export function forecastBudgetDemand(
+    scenarioId: string,
+    currentConfidence: number,
+    centrality: number,
+    inHighRiskRelease: boolean,
+    policy: PredictiveBudgetPolicy,
+    daysAhead: number
+): BudgetForecast {
+    // 1. Forecast Decay
+    const predictedConfidence = currentConfidence * Math.pow(0.5, daysAhead / policy.halfLifeDays)
+
+    // 2. Identify Gap
+    const gap = Math.max(0, policy.targetConfidence - predictedConfidence)
+
+    // 3. Convert Gap to Points using ROI bands
+    const project = (roi: number) => {
+        let points = gap / roi
+        if (centrality > 0.6) points *= policy.safetyMultipliers.highCoupling
+        if (inHighRiskRelease) points *= policy.safetyMultipliers.highReleaseRisk
+        return Math.ceil(points)
+    }
+
+    return {
+        scenarioId,
+        forecast: {
+            optimistic: project(policy.roiExpectations.optimistic),
+            expected: project(policy.roiExpectations.expected),
+            pessimistic: project(policy.roiExpectations.pessimistic)
+        },
+        justification: `Forecasted for ${daysAhead} days. Decay baseline ${predictedConfidence.toFixed(1)}. Confidence gap ${gap.toFixed(1)}.`
+    }
+}
+
