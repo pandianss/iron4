@@ -3,8 +3,9 @@ import { SimulationPhase } from "../engine/simulation"
 import { ScenarioClass } from "../../test/golden/types"
 import { PolicyException, isExceptionValid, doesExceptionMatchHeatmap } from "./exceptions"
 import { EscalationState, ScenarioSLA } from "./escalations"
-import { BudgetForecast, ForecastAccuracyResult, ChaosBudget } from "./chaos"
+import { BudgetForecast, ForecastAccuracyResult, ChaosBudget, ExecutiveCredibilityReport, RegulatoryAttestation } from "./chaos"
 import { ScenarioId } from "./coupling"
+
 
 
 
@@ -60,7 +61,13 @@ export type ReleaseGateDecisionReport = {
         affectedScenarios: number
     }
     forecastRisk?: ReleaseRiskReport[]
+    efci?: {
+        index: number
+        grade: string
+    }
+    isAttested?: boolean
 }
+
 
 export type ReleaseRiskReport = {
     scenarioId: ScenarioId
@@ -115,8 +122,11 @@ export function evaluateReleaseGate(
     escalation?: EscalationState,
     openSLAs: readonly ScenarioSLA[] = [],
     forecastRisks: readonly ReleaseRiskReport[] = [],
+    credibility?: ExecutiveCredibilityReport,
+    latestAttestation?: RegulatoryAttestation,
     now: Date = new Date()
 ): ReleaseGateDecisionReport {
+
 
 
 
@@ -219,7 +229,10 @@ export function evaluateReleaseGate(
         rationale,
         triggeringCells: triggeringCells.length > 0 ? triggeringCells : undefined,
         metrics: { totalSeverity, maxCellSeverity, affectedScenarios },
-        forecastRisk: forecastRisks.length > 0 ? [...forecastRisks] : undefined
+        forecastRisk: forecastRisks.length > 0 ? [...forecastRisks] : undefined,
+        efci: credibility ? { index: credibility.index, grade: credibility.grade } : undefined,
+        isAttested: !!latestAttestation
     }
 }
+
 
