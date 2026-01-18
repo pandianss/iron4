@@ -289,3 +289,102 @@ export function forecastBudgetDemand(
     }
 }
 
+// --- Forecast Accuracy Tracking (FAT) ---
+
+export type ForecastAccuracyClass =
+    | "accurate"
+    | "optimistic-bias"
+    | "pessimistic-bias"
+    | "missed-coupling"
+    | "policy-drift"
+    | "release-shift"
+
+export type ForecastAccuracyResult = {
+    scenarioId: string
+    classification: ForecastAccuracyClass
+    budgetErrorPct: number
+    withinBand: boolean
+    suggestedAdjustments: { factor: string; delta: number }[]
+}
+
+/**
+ * Forecast Accuracy Tracking
+ * Measures miss reasons and suggests policy calibration.
+ */
+export function evaluateForecastAccuracy(
+    forecast: BudgetForecast,
+    actualPointsSpent: number,
+    policySnapshot: PredictiveBudgetPolicy
+): ForecastAccuracyResult {
+    const error = actualPointsSpent - forecast.expected
+    const budgetErrorPct = (error / forecast.expected) * 100
+    const withinBand = actualPointsSpent >= forecast.optimistic && actualPointsSpent <= forecast.pessimistic
+
+    let classification: ForecastAccuracyClass = "accurate"
+    const adjustments: { factor: string; delta: number }[] = []
+
+    if (budgetErrorPct > 10) {
+        classification = "optimistic-bias"
+        adjustments.push({ factor: "roi.expected", delta: -0.1 })
+    } else if (budgetErrorPct < -10) {
+        classification = "pessimistic-bias"
+        adjustments.push({ factor: "roi.expected", delta: 0.1 })
+    }
+
+    if (!withinBand && budgetErrorPct > 20) {
+        classification = "policy-drift"
+        adjustments.push({ factor: "halfLifeDays", delta: -0.1 })
+    }
+
+    return {
+        scenarioId: forecast.scenarioId,
+        classification,
+        budgetErrorPct,
+        withinBand,
+        suggestedAdjustments: adjustments
+    }
+}
+
+// --- Multi-Quarter Backtesting ---
+
+export type BacktestWindow = {
+    quarterId: string
+    forecast: BudgetForecast
+    actuals: { pointsSpent: number }
+}
+
+export type BacktestResult = {
+    averageAccuracy: number
+    missCount: number
+    coverageRate: number // % within band
+    recommendation: "maintain-policy" | "tighten-policy" | "review-graph"
+}
+
+/**
+ * Multi-Quarter Forecast Backtesting
+ * Validates the PCBF model against historical windows.
+ */
+export function runMultiQuarterBacktest(
+    scenarioId: string,
+    history: BacktestWindow[],
+    policy: PredictiveBudgetPolicy
+): BacktestResult {
+    const accuracyResults = history.map(h => evaluateForecastAccuracy(h.forecast, h.actuals.pointsSpent, policy))
+
+    const coverageRate = (accuracyResults.filter(r => r.withinBand).length / history.length) * 100
+    const missCount = accuracyResults.filter(r => !r.withinBand).length
+    const averageAccuracy = accuracyResults.reduce((acc, r) => acc + (100 - Math.abs(r.budgetErrorPct)), 0) / history.length
+
+    let recommendation: BacktestResult["recommendation"] = "maintain-policy"
+    if (coverageRate < 60) recommendation = "tighten-policy"
+    if (accuracyResults.some(r => r.classification === "missed-coupling")) recommendation = "review-graph"
+
+    return {
+        averageAccuracy,
+        missCount,
+        coverageRate,
+        recommendation
+    }
+}
+
+
