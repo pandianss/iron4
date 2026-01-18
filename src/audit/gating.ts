@@ -3,6 +3,9 @@ import { SimulationPhase } from "../engine/simulation"
 import { ScenarioClass } from "../../test/golden/types"
 import { PolicyException, isExceptionValid, doesExceptionMatchHeatmap } from "./exceptions"
 import { EscalationState, ScenarioSLA } from "./escalations"
+import { BudgetForecast, ForecastAccuracyResult, ChaosBudget } from "./chaos"
+import { ScenarioId } from "./coupling"
+
 
 
 
@@ -56,7 +59,54 @@ export type ReleaseGateDecisionReport = {
         maxCellSeverity: number
         affectedScenarios: number
     }
+    forecastRisk?: ReleaseRiskReport[]
 }
+
+export type ReleaseRiskReport = {
+    scenarioId: ScenarioId
+    riskScore: number // 0-100
+    riskLevel: "low" | "medium" | "high" | "critical"
+    factors: {
+        decayRisk: number
+        budgetRisk: number
+        accuracyRisk: number
+    }
+}
+
+export function calculateForecastDrivenReleaseRisk(
+    scenarioId: ScenarioId,
+    forecast: BudgetForecast,
+    accuracy: ForecastAccuracyResult,
+    budget: ChaosBudget,
+    centrality: number
+): ReleaseRiskReport {
+    // 1. Decay Risk: related to forecasted gap
+    const gap = forecast.forecast.expected // Points needed to close gap
+    const decayRisk = Math.min(40, (gap / 10) * 40) // Clamped at 40
+
+    // 2. Budget Risk: can we afford the pessimistic case?
+    const pessimisticCost = forecast.forecast.pessimistic
+    const budgetRisk = budget.remainingUnits < pessimisticCost ? 40 : 0
+
+    // 3. Accuracy Risk: how much do we trust the forecast?
+    const accuracyRisk = accuracy.withinBand ? 0 : 20
+
+    const rawScore = (decayRisk + budgetRisk + accuracyRisk) * (1 + centrality)
+    const riskScore = Math.min(100, rawScore)
+
+    let riskLevel: ReleaseRiskReport["riskLevel"] = "low"
+    if (riskScore >= 90) riskLevel = "critical"
+    else if (riskScore >= 60) riskLevel = "high"
+    else if (riskScore >= 30) riskLevel = "medium"
+
+    return {
+        scenarioId,
+        riskScore,
+        riskLevel,
+        factors: { decayRisk, budgetRisk, accuracyRisk }
+    }
+}
+
 
 export function evaluateReleaseGate(
     heatmap: readonly HeatmapCell[],
@@ -64,8 +114,10 @@ export function evaluateReleaseGate(
     exceptions: readonly PolicyException[] = [],
     escalation?: EscalationState,
     openSLAs: readonly ScenarioSLA[] = [],
+    forecastRisks: readonly ReleaseRiskReport[] = [],
     now: Date = new Date()
 ): ReleaseGateDecisionReport {
+
 
 
     const rationale: string[] = []
@@ -81,6 +133,7 @@ export function evaluateReleaseGate(
         policy.forbiddenPhases.includes(c.phase) ||
         (policy.scenarioClassCaps[c.scenarioClass] !== undefined && c.severityScore > policy.scenarioClassCaps[c.scenarioClass])
     )
+
 
     let rawDecision: ReleaseDecision = "auto-approve"
 
@@ -132,6 +185,18 @@ export function evaluateReleaseGate(
         }
     }
 
+    // Step 4: Enforce Forecast-Driven Risk
+    for (const fr of forecastRisks) {
+        if (fr.riskLevel === "critical") {
+            rawDecision = "block-release"
+            rationale.push(`Forecast block: Scenario ${fr.scenarioId} has CRITICAL forecast risk (score: ${fr.riskScore})`)
+        } else if (fr.riskLevel === "high" && rawDecision !== "block-release") {
+            rawDecision = "approve-with-review"
+            rationale.push(`Forecast review: Scenario ${fr.scenarioId} has HIGH forecast risk (score: ${fr.riskScore})`)
+        }
+    }
+
+
     // Step 4: Consider Exceptions if blocked
     if (rawDecision === "block-release") {
         const validException = exceptions.find(ex =>
@@ -153,6 +218,8 @@ export function evaluateReleaseGate(
         decision: rawDecision,
         rationale,
         triggeringCells: triggeringCells.length > 0 ? triggeringCells : undefined,
-        metrics: { totalSeverity, maxCellSeverity, affectedScenarios }
+        metrics: { totalSeverity, maxCellSeverity, affectedScenarios },
+        forecastRisk: forecastRisks.length > 0 ? [...forecastRisks] : undefined
     }
 }
+
